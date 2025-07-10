@@ -4,11 +4,30 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import { saveAs } from "file-saver";
+import { Rnd } from "react-rnd";
 
 const App = () => {
   const [imageSrc, setImageSrc] = useState(null);
   const [originalImageSrc, setOriginalImageSrc] = useState(null);
   const [textElements, setTextElements] = useState([]);
+  
+  const handleTextDragStop = (index, e, d) => {
+    setTextElements(textElements.map((el, i) => 
+      i === index ? { ...el, x: d.x, y: d.y } : el
+    ));
+  };
+  
+  const handleTextResizeStop = (index, ref, position) => {
+    setTextElements(textElements.map((el, i) => 
+      i === index ? { 
+        ...el, 
+        width: ref.style.width, 
+        height: ref.style.height,
+        x: position.x,
+        y: position.y
+      } : el
+    ));
+  };
   const [frameSrc, setFrameSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -32,16 +51,37 @@ const App = () => {
          canvas.height = image.height;
          
          // Apply adjustments
+         ctx.save();
+         if (isFlipped) {
+           ctx.translate(image.width, 0);
+           ctx.scale(-1, 1);
+         }
+         if (rotation !== 0) {
+           ctx.translate(image.width / 2, image.height / 2);
+           ctx.rotate((rotation * Math.PI) / 180);
+           ctx.translate(-image.width / 2, -image.height / 2);
+         }
          ctx.filter = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
          ctx.drawImage(image, 0, 0);
+         ctx.restore();
          
          // Update preview
          const updatedImage = canvas.toDataURL('image/jpeg');
          setImageSrc(updatedImage);
        };
      }
-   }, [brightness, saturation, contrast, originalImageSrc]);
+   }, [brightness, saturation, contrast, originalImageSrc, isFlipped]);
   const [text, setText] = useState("");
+
+  const handleTextChange = (index, newText) => {
+    setTextElements(textElements.map((el, i) => 
+      i === index ? { ...el, text: newText } : el
+    ));
+  };
+
+
+
+
   const [textStyle, setTextStyle] = useState({
     color: "#ffffff",
     fontSize: 24,
@@ -137,7 +177,20 @@ const App = () => {
 
     // Apply image transformations
     ctx.save();
-
+    
+    // Apply transformations to the cropped area only
+    if (isFlipped || rotation !== 0) {
+      ctx.save();
+      ctx.translate(croppedAreaPixels.width / 2, croppedAreaPixels.height / 2);
+      if (isFlipped) {
+        ctx.scale(-1, 1);
+      }
+      if (rotation !== 0) {
+        ctx.rotate((rotation * Math.PI) / 180);
+      }
+      ctx.translate(-croppedAreaPixels.width / 2, -croppedAreaPixels.height / 2);
+    }
+    
     // Apply image adjustments
     let filterString = '';
     if (filter !== 'none') {
@@ -203,7 +256,10 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-slate-100 flex justify-center items-center px-4 py-8">
       <div className="w-full max-w-[500px] bg-white rounded-3xl shadow-2xl p-5 border border-gray-200">
-        <div className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center">
+        <div 
+          className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center"
+
+        >
           {!imageSrc ? (
             <label className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 cursor-pointer">
               <div className="text-4xl mb-2">🖼️</div>
@@ -245,6 +301,53 @@ const App = () => {
                   alt="frame"
                 />
               )}
+              {textElements.map((textElement, index) => (
+                <Rnd
+                  key={index}
+                  size={{ 
+                    width: textElement.width || 200, 
+                    height: textElement.height || 100 
+                  }}
+                  position={{ x: textElement.x || 50, y: textElement.y || 50 }}
+                  onDragStop={(e, d) => handleTextDragStop(index, e, d)}
+                  onResizeStop={(e, direction, ref, delta, position) => 
+                    handleTextResizeStop(index, ref, position)
+                  }
+                  bounds="parent"
+                  style={{
+                    color: textStyle.color,
+                    fontSize: textStyle.fontSize,
+                    fontFamily: textStyle.fontFamily,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {textElement.text}
+                  <button
+                    onClick={() => {
+                      setTextElements(textElements.filter((_, i) => i !== index));
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      right: '-10px',
+                      background: 'red',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '20px',
+                      height: '20px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ×
+                  </button>
+                </Rnd>
+              ))}
               {text && (
                 <div
                   className="absolute select-none"

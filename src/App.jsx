@@ -10,23 +10,29 @@ const App = () => {
   const [imageSrc, setImageSrc] = useState(null);
   const [originalImageSrc, setOriginalImageSrc] = useState(null);
   const [textElements, setTextElements] = useState([]);
-  
+
   const handleTextDragStop = (index, e, d) => {
-    setTextElements(textElements.map((el, i) => 
-      i === index ? { ...el, x: d.x, y: d.y } : el
-    ));
+    setTextElements(
+      textElements.map((el, i) =>
+        i === index ? { ...el, x: d.x, y: d.y } : el
+      )
+    );
   };
-  
+
   const handleTextResizeStop = (index, ref, position) => {
-    setTextElements(textElements.map((el, i) => 
-      i === index ? { 
-        ...el, 
-        width: ref.style.width, 
-        height: ref.style.height,
-        x: position.x,
-        y: position.y
-      } : el
-    ));
+    setTextElements(
+      textElements.map((el, i) =>
+        i === index
+          ? {
+              ...el,
+              width: ref.style.width,
+              height: ref.style.height,
+              x: position.x,
+              y: position.y,
+            }
+          : el
+      )
+    );
   };
   const [frameSrc, setFrameSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -38,49 +44,46 @@ const App = () => {
   const [brightness, setBrightness] = useState(100);
   const [saturation, setSaturation] = useState(100);
   const [contrast, setContrast] = useState(100);
-  
+
   // Re-render when adjustments change
-   useEffect(() => {
-     if (originalImageSrc) {
-       const canvas = document.createElement('canvas');
-       const ctx = canvas.getContext('2d');
-       const image = new Image();
-       image.src = originalImageSrc;
-       image.onload = () => {
-         canvas.width = image.width;
-         canvas.height = image.height;
-         
-         // Apply adjustments
-         ctx.save();
-         if (isFlipped) {
-           ctx.translate(image.width, 0);
-           ctx.scale(-1, 1);
-         }
-         if (rotation !== 0) {
-           ctx.translate(image.width / 2, image.height / 2);
-           ctx.rotate((rotation * Math.PI) / 180);
-           ctx.translate(-image.width / 2, -image.height / 2);
-         }
-         ctx.filter = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
-         ctx.drawImage(image, 0, 0);
-         ctx.restore();
-         
-         // Update preview
-         const updatedImage = canvas.toDataURL('image/jpeg');
-         setImageSrc(updatedImage);
-       };
-     }
-   }, [brightness, saturation, contrast, originalImageSrc, isFlipped]);
+  useEffect(() => {
+    if (originalImageSrc) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const image = new Image();
+      image.src = originalImageSrc;
+      image.onload = () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        // Apply adjustments
+        ctx.save();
+        if (isFlipped) {
+          ctx.translate(image.width, 0);
+          ctx.scale(-1, 1);
+        }
+        if (rotation !== 0) {
+          ctx.translate(image.width / 2, image.height / 2);
+          ctx.rotate((rotation * Math.PI) / 180);
+          ctx.translate(-image.width / 2, -image.height / 2);
+        }
+        ctx.filter = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
+        ctx.drawImage(image, 0, 0);
+        ctx.restore();
+
+        // Update preview
+        const updatedImage = canvas.toDataURL("image/jpeg");
+        setImageSrc(updatedImage);
+      };
+    }
+  }, [brightness, saturation, contrast, originalImageSrc, isFlipped]);
   const [text, setText] = useState("");
 
   const handleTextChange = (index, newText) => {
-    setTextElements(textElements.map((el, i) => 
-      i === index ? { ...el, text: newText } : el
-    ));
+    setTextElements(
+      textElements.map((el, i) => (i === index ? { ...el, text: newText } : el))
+    );
   };
-
-
-
 
   const [textStyle, setTextStyle] = useState({
     color: "#ffffff",
@@ -161,91 +164,185 @@ const App = () => {
     }
   };
 
-  const downloadImage = async () => {
-    if (!imageSrc || !croppedAreaPixels) return;
+  const createImage = (url) =>
+    new Promise((resolve, reject) => {
+      const image = new Image();
+      image.setAttribute("crossOrigin", "anonymous"); // to avoid CORS issues
+      image.onload = () => resolve(image);
+      image.onerror = (error) => reject(error);
+      image.src = url;
+    });
 
-    const image = new Image();
-    image.src = imageSrc;
-    await image.decode();
+  const getRadianAngle = (degreeValue) => (degreeValue * Math.PI) / 180;
 
+  const getCroppedImg = async (
+    imageSrc,
+    pixelCrop,
+    rotation = 0,
+    flip = { horizontal: false, vertical: false }
+  ) => {
+    const image = await createImage(imageSrc);
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
-    // Set canvas to cropped dimensions
-    canvas.width = croppedAreaPixels.width;
-    canvas.height = croppedAreaPixels.height;
+    const rotRad = getRadianAngle(rotation);
 
-    // Apply image transformations
-    ctx.save();
-    
-    // Apply transformations to the cropped area only
-    if (isFlipped || rotation !== 0) {
-      ctx.save();
-      ctx.translate(croppedAreaPixels.width / 2, croppedAreaPixels.height / 2);
-      if (isFlipped) {
-        ctx.scale(-1, 1);
-      }
-      if (rotation !== 0) {
-        ctx.rotate((rotation * Math.PI) / 180);
-      }
-      ctx.translate(-croppedAreaPixels.width / 2, -croppedAreaPixels.height / 2);
-    }
-    
-    // Apply image adjustments
-    let filterString = '';
-    if (filter !== 'none') {
-      filterString += `${filter} `;
-    }
-    filterString += `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
-    ctx.filter = filterString;
-    
-    // Draw the cropped area
-    ctx.drawImage(
-      image,
-      croppedAreaPixels.x,
-      croppedAreaPixels.y,
-      croppedAreaPixels.width,
-      croppedAreaPixels.height,
-      0,
-      0,
-      croppedAreaPixels.width,
-      croppedAreaPixels.height
+    // calculate bounding box of rotated image
+    const bBoxWidth =
+      Math.abs(Math.cos(rotRad) * image.width) +
+      Math.abs(Math.sin(rotRad) * image.height);
+    const bBoxHeight =
+      Math.abs(Math.sin(rotRad) * image.width) +
+      Math.abs(Math.cos(rotRad) * image.height);
+
+    // set canvas size to bounding box
+    canvas.width = bBoxWidth;
+    canvas.height = bBoxHeight;
+
+    // rotate and flip context
+    ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
+    ctx.rotate(rotRad);
+    ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1);
+    ctx.translate(-image.width / 2, -image.height / 2);
+
+    // draw original image onto rotated/flipped canvas
+    ctx.drawImage(image, 0, 0);
+
+    // get the cropped image from the transformed canvas
+    const data = ctx.getImageData(
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height
     );
 
-    ctx.restore();
+    // create a new canvas with desired cropped size
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = pixelCrop.width;
+    cropCanvas.height = pixelCrop.height;
 
-    // Draw frame if any
-    if (frameSrc) {
-      const frameImage = new Image();
-      frameImage.src = frameSrc;
-      await frameImage.decode();
+    const cropCtx = cropCanvas.getContext("2d");
+    cropCtx.putImageData(data, 0, 0);
 
-      ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
-    }
-
-    // Draw text if any
-    if (textElements && textElements.length > 0) {
-      textElements.forEach((textElement) => {
-        if (textElement && textElement.style && textElement.position) {
-          ctx.font = `${textElement.style.fontSize}px ${
-            textElement.style.fontFamily || "sans-serif"
-          }`;
-          ctx.fillStyle = textElement.style.color || "#000000";
-          ctx.textAlign = "center";
-          ctx.fillText(
-            textElement.content || "",
-            textElement.position.x || 0,
-            textElement.position.y || 0
-          );
-        }
-      });
-    }
-
-    // Save image
-    canvas.toBlob((blob) => {
-      if (blob) saveAs(blob, "cropped-photo.png");
+    // return blob
+    return new Promise((resolve) => {
+      cropCanvas.toBlob((blob) => resolve(blob), "image/png");
     });
   };
+
+  const downloadImage = async () => {
+    if (!originalImageSrc || !croppedAreaPixels) return;
+
+    const blob = await getCroppedImg(
+      originalImageSrc,
+      croppedAreaPixels,
+      parseFloat(rotation),
+      { horizontal: isFlipped, vertical: false }
+    );
+
+    if (blob) {
+      saveAs(blob, "cropped-output.png");
+    }
+  };
+
+  // const downloadImage = async () => {
+  //   if (!imageSrc || !croppedAreaPixels) return;
+
+  //   const image = new Image();
+  //   image.src = imageSrc;
+  //   await image.decode();
+
+  //   const canvas = document.createElement("canvas");
+  //   const ctx = canvas.getContext("2d");
+
+  //   // Set canvas to cropped dimensions
+  //   canvas.width = croppedAreaPixels.width;
+  //   canvas.height = croppedAreaPixels.height;
+
+  //   // Apply transformations consistently with preview
+  //   ctx.save();
+
+  //   // Apply adjustments first (matches preview mediaStyle.filter)
+  //   let filterString = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
+  //   if (filter !== 'none') {
+  //     filterString = `${filter} ${filterString}`;
+  //   }
+  //   ctx.filter = filterString;
+
+  //   // Apply transformations (matches preview mediaStyle.transform)
+  //   if (isFlipped) {
+  //     ctx.translate(croppedAreaPixels.width, 0);
+  //     ctx.scale(-1, 1);
+  //   }
+
+  //   // Calculate rotated dimensions
+  //   const angleRad = (rotation * Math.PI) / 180;
+  //   const rotatedWidth = Math.abs(croppedAreaPixels.width * Math.cos(angleRad)) + Math.abs(croppedAreaPixels.height * Math.sin(angleRad));
+  //   const rotatedHeight = Math.abs(croppedAreaPixels.height * Math.cos(angleRad)) + Math.abs(croppedAreaPixels.width * Math.sin(angleRad));
+
+  //   // Create canvas with rotated dimensions
+  //   canvas.width = rotatedWidth;
+  //   canvas.height = rotatedHeight;
+
+  //   // Apply transformations
+  //   ctx.save();
+  //   ctx.translate(rotatedWidth/2, rotatedHeight/2);
+  //   ctx.rotate(angleRad);
+  //   ctx.translate(-croppedAreaPixels.width/2, -croppedAreaPixels.height/2);
+
+  //   // Apply filters
+  //   filterString = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
+  //   if (filter !== 'none') {
+  //     filterString = `${filter} ${filterString}`;
+  //   }
+  //   ctx.filter = filterString;
+
+  //   // Draw the cropped area
+  //   ctx.drawImage(
+  //     image,
+  //     croppedAreaPixels.x,
+  //     croppedAreaPixels.y,
+  //     croppedAreaPixels.width,
+  //     croppedAreaPixels.height,
+  //     0,
+  //     0,
+  //     croppedAreaPixels.width,
+  //     croppedAreaPixels.height
+  //   );
+  //   ctx.restore();
+
+  //   // Draw frame if any
+  //   if (frameSrc) {
+  //     const frameImage = new Image();
+  //     frameImage.src = frameSrc;
+  //     await frameImage.decode();
+
+  //     ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
+  //   }
+
+  //   // Draw text if any
+  //   if (textElements && textElements.length > 0) {
+  //     textElements.forEach((textElement) => {
+  //       if (textElement && textElement.style && textElement.position) {
+  //         ctx.font = `${textElement.style.fontSize}px ${
+  //           textElement.style.fontFamily || "sans-serif"
+  //         }`;
+  //         ctx.fillStyle = textElement.style.color || "#000000";
+  //         ctx.textAlign = "center";
+  //         ctx.fillText(
+  //           textElement.content || "",
+  //           textElement.position.x || 0,
+  //           textElement.position.y || 0
+  //         );
+  //       }
+  //     });
+  //   }
+
+  //   // Save image
+  //   canvas.toBlob((blob) => {
+  //     if (blob) saveAs(blob, "cropped-photo.png");
+  //   });
+  // };
 
   const frameOptions = [
     "/frames/frame1.png",
@@ -256,10 +353,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-slate-100 flex justify-center items-center px-4 py-8">
       <div className="w-full max-w-[500px] bg-white rounded-3xl shadow-2xl p-5 border border-gray-200">
-        <div 
-          className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center"
-
-        >
+        <div className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center">
           {!imageSrc ? (
             <label className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 cursor-pointer">
               <div className="text-4xl mb-2">🖼️</div>
@@ -274,7 +368,7 @@ const App = () => {
           ) : (
             <>
               <Cropper
-                cropSize={{ width: 400, height: 400 }}
+                cropSize={{ width: 440, height: 440 }}
                 image={imageSrc}
                 crop={crop}
                 zoom={zoom}
@@ -304,13 +398,13 @@ const App = () => {
               {textElements.map((textElement, index) => (
                 <Rnd
                   key={index}
-                  size={{ 
-                    width: textElement.width || 200, 
-                    height: textElement.height || 100 
+                  size={{
+                    width: textElement.width || 200,
+                    height: textElement.height || 100,
                   }}
                   position={{ x: textElement.x || 50, y: textElement.y || 50 }}
                   onDragStop={(e, d) => handleTextDragStop(index, e, d)}
-                  onResizeStop={(e, direction, ref, delta, position) => 
+                  onResizeStop={(e, direction, ref, delta, position) =>
                     handleTextResizeStop(index, ref, position)
                   }
                   bounds="parent"
@@ -318,30 +412,32 @@ const App = () => {
                     color: textStyle.color,
                     fontSize: textStyle.fontSize,
                     fontFamily: textStyle.fontFamily,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    backgroundColor: "rgba(0, 0, 0, 0.5)",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   {textElement.text}
                   <button
                     onClick={() => {
-                      setTextElements(textElements.filter((_, i) => i !== index));
+                      setTextElements(
+                        textElements.filter((_, i) => i !== index)
+                      );
                     }}
                     style={{
-                      position: 'absolute',
-                      top: '-10px',
-                      right: '-10px',
-                      background: 'red',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '20px',
-                      height: '20px',
-                      cursor: 'pointer',
+                      position: "absolute",
+                      top: "-10px",
+                      right: "-10px",
+                      background: "red",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: "20px",
+                      height: "20px",
+                      cursor: "pointer",
                     }}
                   >
                     ×
@@ -391,7 +487,9 @@ const App = () => {
 
           <div className="space-y-2 mt-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brightness: {brightness}%</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Brightness: {brightness}%
+              </label>
               <input
                 type="range"
                 min="0"
@@ -402,7 +500,9 @@ const App = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Saturation: {saturation}%</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Saturation: {saturation}%
+              </label>
               <input
                 type="range"
                 min="0"
@@ -413,7 +513,9 @@ const App = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contrast: {contrast}%</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Contrast: {contrast}%
+              </label>
               <input
                 type="range"
                 min="0"

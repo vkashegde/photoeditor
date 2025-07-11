@@ -238,10 +238,10 @@ const App = () => {
     await image.decode();
 
     // Create canvas with frame dimensions if frame exists
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = croppedAreaPixels.width;
     canvas.height = croppedAreaPixels.height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
 
     // Draw cropped image
     ctx.save();
@@ -266,23 +266,22 @@ const App = () => {
       const frameImage = new Image();
       frameImage.src = frameSrc;
       await frameImage.decode();
-      
+
       // Calculate aspect ratio to maintain frame proportions
       const frameAspectRatio = frameImage.width / frameImage.height;
       const frameHeight = croppedAreaPixels.width / frameAspectRatio;
-      
-      ctx.drawImage(frameImage, 
-        0, 
-        0, 
-        croppedAreaPixels.width, 
-        frameHeight
-      );
+
+      ctx.drawImage(frameImage, 0, 0, croppedAreaPixels.width, frameHeight);
     }
 
     // Save image
-    canvas.toBlob((blob) => {
-      if (blob) saveAs(blob, "cropped-photo.png");
-    });
+    canvas.toBlob(
+      (blob) => {
+        if (blob) saveAs(blob, "cropped-photo.png");
+      },
+      "image/jpeg",
+      0.92
+    ); // 0.92 quality for good compression without noticeable quality loss
   };
 
   const frameOptions = [
@@ -483,7 +482,7 @@ const App = () => {
             </button>
           </div>
 
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <input
               type="text"
               className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm"
@@ -512,7 +511,7 @@ const App = () => {
                 }
               />
             </div>
-          </div>
+          </div> */}
         </div>
 
         <div className="flex overflow-x-auto mt-4 gap-3 pb-1">

@@ -231,118 +231,59 @@ const App = () => {
   };
 
   const downloadImage = async () => {
-    if (!originalImageSrc || !croppedAreaPixels) return;
+    if (!imageSrc || !croppedAreaPixels) return;
 
-    const blob = await getCroppedImg(
-      originalImageSrc,
-      croppedAreaPixels,
-      parseFloat(rotation),
-      { horizontal: isFlipped, vertical: false }
+    const image = new Image();
+    image.src = imageSrc;
+    await image.decode();
+
+    // Create canvas with frame dimensions if frame exists
+    const canvas = document.createElement('canvas');
+    canvas.width = croppedAreaPixels.width;
+    canvas.height = croppedAreaPixels.height;
+    const ctx = canvas.getContext('2d');
+
+    // Draw cropped image
+    ctx.save();
+    ctx.translate(croppedAreaPixels.width / 2, croppedAreaPixels.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-croppedAreaPixels.width / 2, -croppedAreaPixels.height / 2);
+    ctx.drawImage(
+      image,
+      croppedAreaPixels.x,
+      croppedAreaPixels.y,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height,
+      0,
+      0,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height
     );
+    ctx.restore();
 
-    if (blob) {
-      saveAs(blob, "cropped-output.png");
+    // Draw frame if any
+    if (frameSrc) {
+      const frameImage = new Image();
+      frameImage.src = frameSrc;
+      await frameImage.decode();
+      
+      // Calculate aspect ratio to maintain frame proportions
+      const frameAspectRatio = frameImage.width / frameImage.height;
+      const frameHeight = croppedAreaPixels.width / frameAspectRatio;
+      
+      ctx.drawImage(frameImage, 
+        0, 
+        0, 
+        croppedAreaPixels.width, 
+        frameHeight
+      );
     }
+
+    // Save image
+    canvas.toBlob((blob) => {
+      if (blob) saveAs(blob, "cropped-photo.png");
+    });
   };
-
-  // const downloadImage = async () => {
-  //   if (!imageSrc || !croppedAreaPixels) return;
-
-  //   const image = new Image();
-  //   image.src = imageSrc;
-  //   await image.decode();
-
-  //   const canvas = document.createElement("canvas");
-  //   const ctx = canvas.getContext("2d");
-
-  //   // Set canvas to cropped dimensions
-  //   canvas.width = croppedAreaPixels.width;
-  //   canvas.height = croppedAreaPixels.height;
-
-  //   // Apply transformations consistently with preview
-  //   ctx.save();
-
-  //   // Apply adjustments first (matches preview mediaStyle.filter)
-  //   let filterString = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
-  //   if (filter !== 'none') {
-  //     filterString = `${filter} ${filterString}`;
-  //   }
-  //   ctx.filter = filterString;
-
-  //   // Apply transformations (matches preview mediaStyle.transform)
-  //   if (isFlipped) {
-  //     ctx.translate(croppedAreaPixels.width, 0);
-  //     ctx.scale(-1, 1);
-  //   }
-
-  //   // Calculate rotated dimensions
-  //   const angleRad = (rotation * Math.PI) / 180;
-  //   const rotatedWidth = Math.abs(croppedAreaPixels.width * Math.cos(angleRad)) + Math.abs(croppedAreaPixels.height * Math.sin(angleRad));
-  //   const rotatedHeight = Math.abs(croppedAreaPixels.height * Math.cos(angleRad)) + Math.abs(croppedAreaPixels.width * Math.sin(angleRad));
-
-  //   // Create canvas with rotated dimensions
-  //   canvas.width = rotatedWidth;
-  //   canvas.height = rotatedHeight;
-
-  //   // Apply transformations
-  //   ctx.save();
-  //   ctx.translate(rotatedWidth/2, rotatedHeight/2);
-  //   ctx.rotate(angleRad);
-  //   ctx.translate(-croppedAreaPixels.width/2, -croppedAreaPixels.height/2);
-
-  //   // Apply filters
-  //   filterString = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
-  //   if (filter !== 'none') {
-  //     filterString = `${filter} ${filterString}`;
-  //   }
-  //   ctx.filter = filterString;
-
-  //   // Draw the cropped area
-  //   ctx.drawImage(
-  //     image,
-  //     croppedAreaPixels.x,
-  //     croppedAreaPixels.y,
-  //     croppedAreaPixels.width,
-  //     croppedAreaPixels.height,
-  //     0,
-  //     0,
-  //     croppedAreaPixels.width,
-  //     croppedAreaPixels.height
-  //   );
-  //   ctx.restore();
-
-  //   // Draw frame if any
-  //   if (frameSrc) {
-  //     const frameImage = new Image();
-  //     frameImage.src = frameSrc;
-  //     await frameImage.decode();
-
-  //     ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
-  //   }
-
-  //   // Draw text if any
-  //   if (textElements && textElements.length > 0) {
-  //     textElements.forEach((textElement) => {
-  //       if (textElement && textElement.style && textElement.position) {
-  //         ctx.font = `${textElement.style.fontSize}px ${
-  //           textElement.style.fontFamily || "sans-serif"
-  //         }`;
-  //         ctx.fillStyle = textElement.style.color || "#000000";
-  //         ctx.textAlign = "center";
-  //         ctx.fillText(
-  //           textElement.content || "",
-  //           textElement.position.x || 0,
-  //           textElement.position.y || 0
-  //         );
-  //       }
-  //     });
-  //   }
-
-  //   // Save image
-  //   canvas.toBlob((blob) => {
-  //     if (blob) saveAs(blob, "cropped-photo.png");
-  //   });
-  // };
 
   const frameOptions = [
     "/frames/frame1.png",

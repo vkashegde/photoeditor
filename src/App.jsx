@@ -231,27 +231,73 @@ const App = () => {
   };
 
   const downloadImage = async () => {
-    if (!imageSrc || !croppedAreaPixels) return;
+    if (!originalImageSrc || !croppedAreaPixels) return;
 
     const image = new Image();
-    image.src = imageSrc;
+    image.crossOrigin = "anonymous";
+    image.src = originalImageSrc;
     await image.decode();
 
-    // Create canvas with frame dimensions if frame exists
+    // Create an off-screen canvas for filtering, flipping and rotating
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+
+    // Calculate dimensions for rotated image
+    const rotRad = (rotation * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(rotRad));
+    const cos = Math.abs(Math.cos(rotRad));
+
+    const rotatedWidth = image.width * cos + image.height * sin;
+    const rotatedHeight = image.width * sin + image.height * cos;
+
+    // Set canvas to accommodate rotation
+    tempCanvas.width = rotatedWidth;
+    tempCanvas.height = rotatedHeight;
+
+    tempCtx.save();
+
+    // Move to center for transformations
+    tempCtx.translate(rotatedWidth / 2, rotatedHeight / 2);
+
+    // Apply rotation
+    tempCtx.rotate(rotRad);
+
+    // Apply flip if needed
+    if (isFlipped) {
+      tempCtx.scale(-1, 1);
+    }
+
+    // Apply filters BEFORE drawing the image
+    const filterString = [
+      `brightness(${brightness}%)`,
+      `contrast(${contrast}%)`,
+      `saturate(${saturation}%)`,
+    ].join(" ");
+
+    if (filter && filter !== "none") {
+      tempCtx.filter = `${filterString} ${filter}`;
+    } else {
+      tempCtx.filter = filterString;
+    }
+
+    // Draw original image with filters applied
+    tempCtx.drawImage(image, -image.width / 2, -image.height / 2);
+    tempCtx.restore();
+
+    // Now crop from the transformed canvas
     const canvas = document.createElement("canvas");
     canvas.width = croppedAreaPixels.width;
     canvas.height = croppedAreaPixels.height;
     const ctx = canvas.getContext("2d");
 
-    // Draw cropped image
-    ctx.save();
-    ctx.translate(croppedAreaPixels.width / 2, croppedAreaPixels.height / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.translate(-croppedAreaPixels.width / 2, -croppedAreaPixels.height / 2);
+    // Calculate the offset due to rotation
+    const offsetX = (rotatedWidth - image.width) / 2;
+    const offsetY = (rotatedHeight - image.height) / 2;
+
     ctx.drawImage(
-      image,
-      croppedAreaPixels.x,
-      croppedAreaPixels.y,
+      tempCanvas,
+      croppedAreaPixels.x + offsetX,
+      croppedAreaPixels.y + offsetY,
       croppedAreaPixels.width,
       croppedAreaPixels.height,
       0,
@@ -259,30 +305,104 @@ const App = () => {
       croppedAreaPixels.width,
       croppedAreaPixels.height
     );
-    ctx.restore();
 
-    // Draw frame if any
+    // Draw frame if provided
     if (frameSrc) {
       const frameImage = new Image();
+      frameImage.crossOrigin = "anonymous";
       frameImage.src = frameSrc;
       await frameImage.decode();
-
-      // Calculate aspect ratio to maintain frame proportions
-      const frameAspectRatio = frameImage.width / frameImage.height;
-      const frameHeight = croppedAreaPixels.width / frameAspectRatio;
-
-      ctx.drawImage(frameImage, 0, 0, croppedAreaPixels.width, frameHeight);
+      ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
     }
 
-    // Save image
+    // Add text elements to the final image
+    textElements.forEach((textElement) => {
+      ctx.save();
+      ctx.fillStyle = textStyle.color;
+      ctx.font = `${textStyle.fontSize}px ${textStyle.fontFamily}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // Add text background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      const textMetrics = ctx.measureText(textElement.text);
+      const textWidth = textMetrics.width + 16; // padding
+      const textHeight = textStyle.fontSize + 16; // padding
+
+      ctx.fillRect(
+        textElement.x - textWidth / 2,
+        textElement.y - textHeight / 2,
+        textWidth,
+        textHeight
+      );
+
+      // Draw text
+      ctx.fillStyle = textStyle.color;
+      ctx.fillText(textElement.text, textElement.x, textElement.y);
+      ctx.restore();
+    });
+
+    // Convert canvas to blob and download
     canvas.toBlob(
       (blob) => {
-        if (blob) saveAs(blob, "cropped-photo.png");
+        if (blob) {
+          saveAs(blob, "edited-image.jpg");
+        }
       },
       "image/jpeg",
-      0.92
-    ); // 0.92 quality for good compression without noticeable quality loss
+      0.95
+    );
   };
+
+  useEffect(() => {
+    if (originalImageSrc) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const image = new Image();
+      image.src = originalImageSrc;
+      image.onload = () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        ctx.save();
+
+        // Apply transformations
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+
+        if (rotation !== 0) {
+          ctx.rotate((rotation * Math.PI) / 180);
+        }
+
+        if (isFlipped) {
+          ctx.scale(-1, 1);
+        }
+
+        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
+        // Apply filters
+        const filterString = `brightness(${brightness}%) saturate(${saturation}%) contrast(${contrast}%)`;
+        ctx.filter =
+          filter && filter !== "none"
+            ? `${filterString} ${filter}`
+            : filterString;
+
+        ctx.drawImage(image, 0, 0);
+        ctx.restore();
+
+        // Update preview
+        const updatedImage = canvas.toDataURL("image/jpeg");
+        setImageSrc(updatedImage);
+      };
+    }
+  }, [
+    brightness,
+    saturation,
+    contrast,
+    filter,
+    rotation,
+    isFlipped,
+    originalImageSrc,
+  ]);
 
   const frameOptions = [
     "/frames/frame1.png",

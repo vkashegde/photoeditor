@@ -230,21 +230,87 @@ const App = () => {
     });
   };
 
+  const rotateSize = (width, height, rotation) => {
+    const rotRad = getRadianAngle(rotation);
+    return {
+      width: Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
+      height: Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height)
+    };
+  };
+
   const shareImage = async () => {
     try {
+      if (!originalImageSrc || !croppedAreaPixels) return;
+      
+      const image = await createImage(originalImageSrc);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Same canvas drawing logic as downloadImage
-      // ...
+      // Destructure flip from component state
+      const { flip } = this.state;
       
-      canvas.toBlob(async (blob) => {
+      // Apply same transformations as preview
+      const rotRad = getRadianAngle(rotation);
+      const { width: bBoxWidth, height: bBoxHeight } = rotateSize(
+        image.width,
+        image.height,
+        rotation
+      );
+      
+      canvas.width = bBoxWidth;
+      canvas.height = bBoxHeight;
+      
+      ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
+      ctx.rotate(rotRad);
+      
+      // Apply flip if needed
+      ctx.scale(
+        flip.horizontal ? -1 : 1,
+        flip.vertical ? -1 : 1
+      );
+      
+      ctx.drawImage(
+        image,
+        -image.width / 2,
+        -image.height / 2
+      );
+      
+      const croppedCanvas = document.createElement('canvas');
+      const croppedCtx = croppedCanvas.getContext('2d');
+      
+      croppedCanvas.width = croppedAreaPixels.width;
+      croppedCanvas.height = croppedAreaPixels.height;
+      
+      croppedCtx.drawImage(
+        canvas,
+        croppedAreaPixels.x,
+        croppedAreaPixels.y,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height,
+        0,
+        0,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height
+      );
+      
+      croppedCanvas.toBlob(async (blob) => {
         if (navigator.share) {
           // Mobile share
-          await navigator.share({
-            title: 'Edited Photo',
-            files: [new File([blob], 'edited-photo.png', { type: 'image/png' })]
-          });
+           const file = new File([blob], 'edited-photo.png', {
+             type: 'image/png',
+             lastModified: Date.now()
+           });
+           
+           if (navigator.canShare && navigator.canShare({ files: [file] })) {
+             await navigator.share({
+               title: 'Edited Photo',
+               files: [file],
+               text: 'Check out my edited photo!'
+             });
+           } else {
+             // Fallback for browsers that don't support file sharing
+             saveAs(blob, 'edited-photo.png');
+           }
         } else {
           // Fallback to download
           saveAs(blob, 'edited-photo.png');

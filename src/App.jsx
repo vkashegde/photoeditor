@@ -243,38 +243,61 @@ const App = () => {
   };
 
   const shareImage = async () => {
-    try {
-      if (!originalImageSrc || !croppedAreaPixels) return;
+    if (!originalImageSrc || !croppedAreaPixels) return;
 
-      const image = await createImage(originalImageSrc);
+    try {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.src = originalImageSrc;
+      await image.decode();
+
+      // Create an off-screen canvas with filters, rotation, flip
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+
+      const rotRad = (rotation * Math.PI) / 180;
+      const sin = Math.abs(Math.sin(rotRad));
+      const cos = Math.abs(Math.cos(rotRad));
+      const rotatedWidth = image.width * cos + image.height * sin;
+      const rotatedHeight = image.width * sin + image.height * cos;
+
+      tempCanvas.width = rotatedWidth;
+      tempCanvas.height = rotatedHeight;
+
+      tempCtx.save();
+      tempCtx.translate(rotatedWidth / 2, rotatedHeight / 2);
+      tempCtx.rotate(rotRad);
+      if (isFlipped) {
+        tempCtx.scale(-1, 1);
+      }
+
+      // Apply filters
+      const filterString = [
+        `brightness(${brightness}%)`,
+        `contrast(${contrast}%)`,
+        `saturate(${saturation}%)`,
+      ].join(" ");
+      tempCtx.filter =
+        filter && filter !== "none"
+          ? `${filterString} ${filter}`
+          : filterString;
+
+      tempCtx.drawImage(image, -image.width / 2, -image.height / 2);
+      tempCtx.restore();
+
+      // Crop from transformed canvas
       const canvas = document.createElement("canvas");
+      canvas.width = croppedAreaPixels.width;
+      canvas.height = croppedAreaPixels.height;
       const ctx = canvas.getContext("2d");
 
-      const rotRad = getRadianAngle(rotation);
-      const { width: bBoxWidth, height: bBoxHeight } = rotateSize(
-        image.width,
-        image.height,
-        rotation
-      );
+      const offsetX = (rotatedWidth - image.width) / 2;
+      const offsetY = (rotatedHeight - image.height) / 2;
 
-      canvas.width = bBoxWidth;
-      canvas.height = bBoxHeight;
-
-      ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
-      ctx.rotate(rotRad);
-      ctx.scale(isFlipped ? -1 : 1, 1); // apply flip if needed
-      ctx.drawImage(image, -image.width / 2, -image.height / 2);
-
-      const croppedCanvas = document.createElement("canvas");
-      const croppedCtx = croppedCanvas.getContext("2d");
-
-      croppedCanvas.width = croppedAreaPixels.width;
-      croppedCanvas.height = croppedAreaPixels.height;
-
-      croppedCtx.drawImage(
-        canvas,
-        croppedAreaPixels.x,
-        croppedAreaPixels.y,
+      ctx.drawImage(
+        tempCanvas,
+        croppedAreaPixels.x + offsetX,
+        croppedAreaPixels.y + offsetY,
         croppedAreaPixels.width,
         croppedAreaPixels.height,
         0,
@@ -283,25 +306,61 @@ const App = () => {
         croppedAreaPixels.height
       );
 
-      croppedCanvas.toBlob(async (blob) => {
-        const file = new File([blob], "edited-photo.png", {
+      // Add frame if present
+      if (frameSrc) {
+        const frameImage = new Image();
+        frameImage.crossOrigin = "anonymous";
+        frameImage.src = frameSrc;
+        await frameImage.decode();
+        ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Add draggable text elements
+      textElements.forEach((textElement) => {
+        ctx.save();
+        ctx.fillStyle = textStyle.color;
+        ctx.font = `${textStyle.fontSize}px ${textStyle.fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // Add text background
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        const textMetrics = ctx.measureText(textElement.text);
+        const textWidth = textMetrics.width + 16; // padding
+        const textHeight = textStyle.fontSize + 16;
+
+        ctx.fillRect(
+          textElement.x - textWidth / 2,
+          textElement.y - textHeight / 2,
+          textWidth,
+          textHeight
+        );
+
+        // Draw text
+        ctx.fillStyle = textStyle.color;
+        ctx.fillText(textElement.text, textElement.x, textElement.y);
+        ctx.restore();
+      });
+
+      // Convert to blob and share
+      canvas.toBlob(async (blob) => {
+        const file = new File([blob], "edited-image.png", {
           type: "image/png",
           lastModified: Date.now(),
         });
 
         if (navigator.share && navigator.canShare({ files: [file] })) {
           await navigator.share({
-            title: "Edited Photo",
+            title: "Edited Image",
             files: [file],
-            text: "Check out my edited photo!",
+            text: "Check out my edited image!",
           });
         } else {
-          // fallback for unsupported browsers
-          saveAs(blob, "edited-photo.png");
+          saveAs(blob, "edited-image.png");
         }
       }, "image/png");
     } catch (err) {
-      console.error("Error sharing:", err);
+      console.error("Error while sharing image:", err);
     }
   };
 

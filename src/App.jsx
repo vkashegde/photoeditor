@@ -230,6 +230,31 @@ const App = () => {
     });
   };
 
+  const shareImage = async () => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Same canvas drawing logic as downloadImage
+      // ...
+      
+      canvas.toBlob(async (blob) => {
+        if (navigator.share) {
+          // Mobile share
+          await navigator.share({
+            title: 'Edited Photo',
+            files: [new File([blob], 'edited-photo.png', { type: 'image/png' })]
+          });
+        } else {
+          // Fallback to download
+          saveAs(blob, 'edited-photo.png');
+        }
+      }, 'image/png');
+    } catch (err) {
+      console.error('Error sharing:', err);
+    }
+  };
+
   const downloadImage = async () => {
     if (!originalImageSrc || !croppedAreaPixels) return;
 
@@ -651,12 +676,20 @@ const App = () => {
         </div>
 
         {imageSrc && (
-          <button
-            onClick={downloadImage}
-            className="mt-6 w-full bg-blue-600 text-white text-base py-3 rounded-2xl font-semibold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"
-          >
-            <span className="text-lg">⬇️</span> Download Image
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={downloadImage}
+              className="mt-6 w-full bg-blue-600 text-white text-base py-3 rounded-2xl font-semibold shadow-md hover:bg-blue-700 transition flex items-center justify-center gap-2"
+            >
+              <span className="text-lg">⬇️</span> Download Image
+            </button>
+            <button
+              onClick={shareImage}
+              className="mt-6 w-full bg-green-600 text-white text-base py-3 rounded-2xl font-semibold shadow-md hover:bg-green-700 transition flex items-center justify-center gap-2"
+            >
+              <span className="text-lg">↗️</span> Share Image
+            </button>
+          </div>
         )}
       </div>
     </div>

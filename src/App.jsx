@@ -233,54 +233,44 @@ const App = () => {
   const rotateSize = (width, height, rotation) => {
     const rotRad = getRadianAngle(rotation);
     return {
-      width: Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
-      height: Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height)
+      width:
+        Math.abs(Math.cos(rotRad) * width) +
+        Math.abs(Math.sin(rotRad) * height),
+      height:
+        Math.abs(Math.sin(rotRad) * width) +
+        Math.abs(Math.cos(rotRad) * height),
     };
   };
 
   const shareImage = async () => {
     try {
       if (!originalImageSrc || !croppedAreaPixels) return;
-      
+
       const image = await createImage(originalImageSrc);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Destructure flip from component state
-      const { flip } = this.state;
-      
-      // Apply same transformations as preview
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
       const rotRad = getRadianAngle(rotation);
       const { width: bBoxWidth, height: bBoxHeight } = rotateSize(
         image.width,
         image.height,
         rotation
       );
-      
+
       canvas.width = bBoxWidth;
       canvas.height = bBoxHeight;
-      
+
       ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
       ctx.rotate(rotRad);
-      
-      // Apply flip if needed
-      ctx.scale(
-        flip.horizontal ? -1 : 1,
-        flip.vertical ? -1 : 1
-      );
-      
-      ctx.drawImage(
-        image,
-        -image.width / 2,
-        -image.height / 2
-      );
-      
-      const croppedCanvas = document.createElement('canvas');
-      const croppedCtx = croppedCanvas.getContext('2d');
-      
+      ctx.scale(isFlipped ? -1 : 1, 1); // apply flip if needed
+      ctx.drawImage(image, -image.width / 2, -image.height / 2);
+
+      const croppedCanvas = document.createElement("canvas");
+      const croppedCtx = croppedCanvas.getContext("2d");
+
       croppedCanvas.width = croppedAreaPixels.width;
       croppedCanvas.height = croppedAreaPixels.height;
-      
+
       croppedCtx.drawImage(
         canvas,
         croppedAreaPixels.x,
@@ -292,32 +282,26 @@ const App = () => {
         croppedAreaPixels.width,
         croppedAreaPixels.height
       );
-      
+
       croppedCanvas.toBlob(async (blob) => {
-        if (navigator.share) {
-          // Mobile share
-           const file = new File([blob], 'edited-photo.png', {
-             type: 'image/png',
-             lastModified: Date.now()
-           });
-           
-           if (navigator.canShare && navigator.canShare({ files: [file] })) {
-             await navigator.share({
-               title: 'Edited Photo',
-               files: [file],
-               text: 'Check out my edited photo!'
-             });
-           } else {
-             // Fallback for browsers that don't support file sharing
-             saveAs(blob, 'edited-photo.png');
-           }
+        const file = new File([blob], "edited-photo.png", {
+          type: "image/png",
+          lastModified: Date.now(),
+        });
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: "Edited Photo",
+            files: [file],
+            text: "Check out my edited photo!",
+          });
         } else {
-          // Fallback to download
-          saveAs(blob, 'edited-photo.png');
+          // fallback for unsupported browsers
+          saveAs(blob, "edited-photo.png");
         }
-      }, 'image/png');
+      }, "image/png");
     } catch (err) {
-      console.error('Error sharing:', err);
+      console.error("Error sharing:", err);
     }
   };
 
